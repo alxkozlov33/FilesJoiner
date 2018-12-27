@@ -86,4 +86,11 @@ public class ExtendedFile extends File {
         }
         return result;
     }
+    
+    private static String defineHeadersInTxt() {
+        String result = "";
+        
+        
+        return result;
+    }
 }

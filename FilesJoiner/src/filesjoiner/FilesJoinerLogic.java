@@ -236,16 +236,24 @@ public class FilesJoinerLogic {
                 CSVReader csvReader = file.getCsvReader();
                 while ((nextRecord = csvReader.readNext()) != null) {
                     if (nextRecord.length == 1) {
-                        String str = nextRecord[0];
-                        if (str.split("\t").length > 1) {
+
+                        if (nextRecord[0].split("\\t{2,10}").length > 1) {
                             file.separator = "\t".charAt(0);
-                            file.headers = str.split("\t");
+                            //file.headers = str.split("\t");
                         }
-                        if (str.contains("http") || str.contains("www.")) {
+                        if (nextRecord[0].split("\\s{2,10}").length > 1) {
+                            file.separator = "\\s".charAt(0);
+                            //file.headers = str.split("\t");
+                        }
+                        if (nextRecord[0].split(",").length > 1) {
                             file.separator = ",".charAt(0);
-                            file.headers = new String[]{"Website"};
-                            file.hasHeader = false;
+                            //file.headers = str.split("\t");
                         }
+//                        if (str.contains("http") || str.contains("www.")) {
+//                            file.separator = ",".charAt(0);
+//                            file.headers = new String[]{"Website"};
+//                            file.hasHeader = false;
+//                        }
                     } else {
                         file.separator = ",".charAt(0);
                         file.headers = nextRecord;
