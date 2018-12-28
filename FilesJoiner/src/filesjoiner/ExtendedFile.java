@@ -40,18 +40,34 @@ public class ExtendedFile extends File {
         headersPositionsFrom = new HashMap<String, Integer>();
         hasHeader = true;
     }
+    
+    public ExtendedFile(ExtendedFile obj) {
+        super(obj.getAbsolutePath());
+        headersPositionsTo = obj.headersPositionsTo;
+        headersPositionsFrom = obj.headersPositionsFrom;
+        hasHeader = obj.hasHeader;
+        headers = obj.headers;
+        isTempFile = obj.isTempFile;
+    }
+    
     public Map<String, Integer> headersPositionsTo;
     public Map<String, Integer> headersPositionsFrom;
     public boolean hasHeader;
-    public char separator = ',';
+    public boolean isTempFile;
+    public String separator = ",";
     public String[] headers;
+    
+    public ExtendedFile markFileAsTemp(){
+        this.isTempFile = true;
+        return this;
+    }
 
     public CSVReader getCsvReader() {
         Reader reader;
         try {
             if (FilenameUtils.getExtension(this.getAbsolutePath()).equalsIgnoreCase("csv")) {
                 reader = Files.newBufferedReader(Paths.get(this.getAbsolutePath()));
-                csvReader = new CSVReader(reader, this.separator);
+                csvReader = new CSVReader(reader, this.separator.charAt(0));
             } else if (FilenameUtils.getExtension(this.getAbsolutePath()).equalsIgnoreCase("xlsx")
                     || FilenameUtils.getExtension(this.getAbsolutePath()).equalsIgnoreCase("xls")) {
 
@@ -63,7 +79,7 @@ public class ExtendedFile extends File {
             } else if (FilenameUtils.getExtension(this.getAbsolutePath()).equalsIgnoreCase("txt")) {
                 InputStream inp = new FileInputStream(this);
                 reader = Files.newBufferedReader(Paths.get(this.getAbsolutePath()));
-                csvReader = new CSVReader(reader, this.separator);
+                csvReader = new CSVReader(reader);
                 inp.close();
             }
         } catch (FileNotFoundException ex) {
@@ -84,13 +100,6 @@ public class ExtendedFile extends File {
             }
             result += "\n";
         }
-        return result;
-    }
-    
-    private static String defineHeadersInTxt() {
-        String result = "";
-        
-        
         return result;
     }
 }

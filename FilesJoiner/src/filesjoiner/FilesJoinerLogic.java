@@ -19,6 +19,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -27,6 +28,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 
 /**
@@ -65,10 +67,13 @@ public class FilesJoinerLogic {
                 LogicSingleton.setCountToZero();
                 headers = new HashMap<String, Integer>();
                 initHeaders();
-                detectHeaders();
-                for (ExtendedFile file : files) {
-                    normalizeHeaders(file);
+                for (int i = 0; i < files.size(); i++) {
+                    ExtendedFile file = detectHeaders(files.get(i));
+                    if (file != null) {
+                        files.set(i, file);
+                    }
                 }
+                normalizeHeaders();
                 scrapeDataFromCsvFiles();
                 if (parent.getCbRemoveDuplicates().isSelected()) {
                     removeDuplicates();
@@ -76,8 +81,9 @@ public class FilesJoinerLogic {
                 countItems();
                 saveDataToFile();
                 for (ExtendedFile file : files) {
-                    file.separator = ',';
+                    file.separator = ",";
                 }
+                removeTempFiles();
             }
         });
         
@@ -105,13 +111,16 @@ public class FilesJoinerLogic {
     }
 
     private void countItems() {
-        ArrayList<String> urls = new ArrayList<String>();
-        for (String[] row : resultList) {
-            if (!StringUtils.isEmpty(row[0])) {
-                urls.add(row[0]);
+        parent.getlblUrlsCountData().setText(String.valueOf(resultList.size()));
+    }
+    
+    private void removeTempFiles() {
+        for (int i = 0; i < files.size(); i++) {
+            ExtendedFile file = files.get(i);
+            if (file.isTempFile) {
+                file.delete();
             }
         }
-        parent.getlblUrlsCountData().setText(Integer.toString(urls.size()));
     }
 
     public static <String, Integer> Entry<String, Integer> getKeysByValue(Map<String, Integer> map, Integer value) {
@@ -215,7 +224,9 @@ public class FilesJoinerLogic {
                             Integer index = 0;
                             try {
                                 index = file.headersPositionsTo.get(itemFrom.getKey());
-                                row[index] = nextRecord[itemFrom.getValue()];
+                                if (nextRecord.length > itemFrom.getValue()) {
+                                    row[index] = nextRecord[itemFrom.getValue()];
+                                }
                             } catch (Exception ex) {
                                 Logger.getLogger(FilesJoinerLogic.class.getName()).log(Level.SEVERE, null, ex);
                             }
@@ -228,42 +239,115 @@ public class FilesJoinerLogic {
             }
         }
     }
-
-    private void detectHeaders() {
+    
+    private boolean isFileHasHeaders(String[] row, String separator) {
+        for (String string : row) {
+            for (String cell : string.split(separator)) {
+                if (headers.containsKey(cell)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    
+    private static String[] validateHeaders(String[] row, String separator) {
+        ArrayList<String> headers = new ArrayList<String>();
+        for (String string : row) {
+            int counter = 0;
+            for (String cell : string.split(separator)) {
+                if (DataHelper.validateURLs(cell)) {
+                    headers.add("Website");
+                }
+                else if (DataHelper.validateEmails(cell)) {
+                    headers.add("Email");
+                }
+                else {
+                    headers.add("UnknownHeader" + (counter + 1));
+                }
+                counter++;
+            }
+        }
+        return headers.toArray(new String[headers.size()]);
+    }
+    
+    private ExtendedFile createTempCsvFile(ExtendedFile file) {
+        StringBuilder sb = new StringBuilder();
+        int counter = file.headers.length;
+        String pathToSave = null;
+        for (String entry : file.headers) {
+            sb.append("\"" + entry + "\"");
+            counter--;
+            if (counter != 0) {
+                sb.append(",");
+            }
+        }
         try {
-            for (ExtendedFile file : files) {
-                String[] nextRecord;
-                CSVReader csvReader = file.getCsvReader();
-                while ((nextRecord = csvReader.readNext()) != null) {
-                    if (nextRecord.length == 1) {
+            sb.append("\n");
+            CSVReader csvReader = file.getCsvReader();
+            List<String[]> rows = csvReader.readAll();
+            for (String[] row : rows) {
+                for (String string : row) {
+                    int commasCounter = file.headers.length;
+                    for (String cell : string.split(file.separator)) {
+                        String content = StringUtils.isEmpty(cell) ? "" : cell;
+                        sb.append("\"" + content + "\"");
+                        commasCounter--;
+                        if (commasCounter != 0) {
+                            sb.append(",");
+                        }
+                    }
+                }
+                sb.append("\n");
+            }
+            pathToSave = outputPath.replace(".", "") + File.separator + "tmp_" + FilenameUtils.getName(file.getAbsolutePath()) + ".csv";
+            Files.write(Paths.get(pathToSave), sb.toString().getBytes(), StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+        } catch (IOException ex) {
+            Logger.getLogger(FilesJoinerLogic.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return new ExtendedFile(pathToSave).markFileAsTemp();
+    }
 
-                        if (nextRecord[0].split("\\t{2,10}").length > 1) {
-                            file.separator = "\t".charAt(0);
-                            //file.headers = str.split("\t");
-                        }
-                        if (nextRecord[0].split("\\s{2,10}").length > 1) {
-                            file.separator = "\\s".charAt(0);
-                            //file.headers = str.split("\t");
-                        }
-                        if (nextRecord[0].split(",").length > 1) {
-                            file.separator = ",".charAt(0);
-                            //file.headers = str.split("\t");
-                        }
-//                        if (str.contains("http") || str.contains("www.")) {
-//                            file.separator = ",".charAt(0);
-//                            file.headers = new String[]{"Website"};
-//                            file.hasHeader = false;
-//                        }
-                    } else {
-                        file.separator = ",".charAt(0);
-                        file.headers = nextRecord;
+    private ExtendedFile detectHeaders(ExtendedFile inFile) {
+        ExtendedFile file = null;
+        try {
+            if (FilenameUtils.getExtension(inFile.getAbsolutePath()).equalsIgnoreCase("txt")) {
+                file = inFile;
+            } else {
+                CSVReader processedCsvReader = inFile.getCsvReader();
+                String[] processedFirstRow = processedCsvReader.readAll().get(0);
+                if (processedFirstRow.length > 1) {
+                    inFile.headers = processedFirstRow;
+                    inFile.hasHeader = true;
+                    return inFile;
+                }
+            }
+            CSVReader csvReader = file.getCsvReader();
+            boolean isFirstRow = true;
+            List<String[]> data = csvReader.readAll();
+            if (data.size() == 0) {
+                return null;
+            }
+            String[] firstRow = data.get(0);
+            if (firstRow.length == 1) {
+                String row = firstRow[0];
+                if (row.split("\\t{1,5}").length > 1) {
+                    file.separator = "\\t{1,5}";
+                }
+                if (row.split(" {2,5}").length > 1) {
+                    file.separator = " {2,5}";
+                }
+                if (row.split(",").length > 1) {
+                    file.separator = ",";
+                }
+                if (isFirstRow) {
+                    file.hasHeader = isFileHasHeaders(firstRow, file.separator);
+                    if (!file.hasHeader) {
+                        file.headers = validateHeaders(firstRow, file.separator);
                     }
-                    for (int i = 0; i < file.headers.length; i++) {
-                        if (file.headers[i].toLowerCase().contains("url")) {
-                            file.headers[i] = "Website";
-                        }
-                    }
-                    break;
+                    isFirstRow = false;
+                    file = new ExtendedFile(createTempCsvFile(file));
+                    return detectHeaders(file);
                 }
             }
         } catch (IOException ex) {
@@ -271,38 +355,41 @@ public class FilesJoinerLogic {
         } catch (NullPointerException ex) {
             Logger.getLogger(FilesJoinerLogic.class.getName()).log(Level.SEVERE, null, ex);
         }
+        return null;
     }
 
-    private void normalizeHeaders(ExtendedFile file) {
-        int counter = 0;
-        if (file.headers == null) {
-            return;
-        }
-        for (String fileHeader : file.headers) {
-            if (fileHeader.equalsIgnoreCase("")) {
-                continue;
+    private void normalizeHeaders() {
+        for (ExtendedFile file : files) {
+            int counter = 0;
+            if (file.headers == null) {
+                return;
             }
-            file.headersPositionsFrom.put(fileHeader, counter);
-            counter++;
-            Object value = null;
-            for (Map.Entry<String, Integer> entry : headers.entrySet()) {
-                if (fileHeader.replace(" ", "").toLowerCase().contains(entry.getKey().toLowerCase())
-                        || entry.getKey().replace(" ", "").toLowerCase().contains(fileHeader.toLowerCase())) {
-                    value = entry;
-                    file.headersPositionsTo.put(fileHeader, entry.getValue());
-                    break;
+            for (String fileHeader : file.headers) {
+                if (fileHeader.equalsIgnoreCase("")) {
+                    continue;
                 }
-            }
-
-            if (value == null) {
-                Map.Entry<String, Integer> maxEntry = null;
+                file.headersPositionsFrom.put(fileHeader, counter);
+                counter++;
+                Object value = null;
                 for (Map.Entry<String, Integer> entry : headers.entrySet()) {
-                    if (maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0) {
-                        maxEntry = entry;
+                    if (fileHeader.replace(" ", "").toLowerCase().contains(entry.getKey().toLowerCase())
+                            || entry.getKey().replace(" ", "").toLowerCase().contains(fileHeader.toLowerCase())) {
+                        value = entry;
+                        file.headersPositionsTo.put(fileHeader, entry.getValue());
+                        break;
                     }
                 }
-                file.headersPositionsTo.put(fileHeader, maxEntry.getValue() + 1);
-                headers.put(fileHeader, maxEntry.getValue() + 1);
+
+                if (value == null) {
+                    Map.Entry<String, Integer> maxEntry = null;
+                    for (Map.Entry<String, Integer> entry : headers.entrySet()) {
+                        if (maxEntry == null || entry.getValue().compareTo(maxEntry.getValue()) > 0) {
+                            maxEntry = entry;
+                        }
+                    }
+                    file.headersPositionsTo.put(fileHeader, maxEntry.getValue() + 1);
+                    headers.put(fileHeader, maxEntry.getValue() + 1);
+                }
             }
         }
     }
