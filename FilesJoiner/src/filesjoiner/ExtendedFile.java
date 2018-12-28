@@ -54,7 +54,8 @@ public class ExtendedFile extends File {
     public Map<String, Integer> headersPositionsFrom;
     public boolean hasHeader;
     public boolean isTempFile;
-    public String separator = ",";
+    public String txtSeparator = ",";
+    public char csvSeparator = ',';
     public String[] headers;
     
     public ExtendedFile markFileAsTemp(){
@@ -67,7 +68,7 @@ public class ExtendedFile extends File {
         try {
             if (FilenameUtils.getExtension(this.getAbsolutePath()).equalsIgnoreCase("csv")) {
                 reader = Files.newBufferedReader(Paths.get(this.getAbsolutePath()));
-                csvReader = new CSVReader(reader, this.separator.charAt(0));
+                csvReader = new CSVReader(reader, this.csvSeparator);
             } else if (FilenameUtils.getExtension(this.getAbsolutePath()).equalsIgnoreCase("xlsx")
                     || FilenameUtils.getExtension(this.getAbsolutePath()).equalsIgnoreCase("xls")) {
 

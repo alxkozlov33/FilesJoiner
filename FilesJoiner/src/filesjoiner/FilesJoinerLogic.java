@@ -81,7 +81,7 @@ public class FilesJoinerLogic {
                 countItems();
                 saveDataToFile();
                 for (ExtendedFile file : files) {
-                    file.separator = ",";
+                    file.csvSeparator = ',';
                 }
                 removeTempFiles();
             }
@@ -289,7 +289,7 @@ public class FilesJoinerLogic {
             for (String[] row : rows) {
                 for (String string : row) {
                     int commasCounter = file.headers.length;
-                    for (String cell : string.split(file.separator)) {
+                    for (String cell : string.split(String.valueOf(file.csvSeparator))) {
                         String content = StringUtils.isEmpty(cell) ? "" : cell;
                         sb.append("\"" + content + "\"");
                         commasCounter--;
@@ -319,8 +319,14 @@ public class FilesJoinerLogic {
                 if (processedFirstRow.length > 1) {
                     inFile.headers = processedFirstRow;
                     inFile.hasHeader = true;
-                    return inFile;
                 }
+                else 
+                {
+                    inFile.csvSeparator = detectCsvSeparator(processedFirstRow[0]);
+                    inFile.headers = processedFirstRow[0].split(String.valueOf(inFile.csvSeparator));
+                    inFile.hasHeader = true;
+                }
+                return inFile;
             }
             CSVReader csvReader = file.getCsvReader();
             boolean isFirstRow = true;
@@ -331,19 +337,11 @@ public class FilesJoinerLogic {
             String[] firstRow = data.get(0);
             if (firstRow.length == 1) {
                 String row = firstRow[0];
-                if (row.split("\\t{1,5}").length > 1) {
-                    file.separator = "\\t{1,5}";
-                }
-                if (row.split(" {2,5}").length > 1) {
-                    file.separator = " {2,5}";
-                }
-                if (row.split(",").length > 1) {
-                    file.separator = ",";
-                }
+                file.csvSeparator = detectCsvSeparator(row);
                 if (isFirstRow) {
-                    file.hasHeader = isFileHasHeaders(firstRow, file.separator);
+                    file.hasHeader = isFileHasHeaders(firstRow, String.valueOf(file.csvSeparator));
                     if (!file.hasHeader) {
-                        file.headers = validateHeaders(firstRow, file.separator);
+                        file.headers = validateHeaders(firstRow, String.valueOf(file.csvSeparator));
                     }
                     isFirstRow = false;
                     file = new ExtendedFile(createTempCsvFile(file));
@@ -356,6 +354,19 @@ public class FilesJoinerLogic {
             Logger.getLogger(FilesJoinerLogic.class.getName()).log(Level.SEVERE, null, ex);
         }
         return null;
+    }
+    
+    private char detectCsvSeparator(String row) {
+        if (row.split("\\t{1,5}").length > 1) {
+            return '\t';
+        }
+        if (row.split(" {2,5}").length > 1) {
+            return ' ';
+        }
+        if (row.split(",").length > 1) {
+            return ',';
+        }
+        return "".charAt(0);
     }
 
     private void normalizeHeaders() {
