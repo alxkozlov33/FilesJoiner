@@ -5,8 +5,13 @@
  */
 package filesjoiner;
 
+import com.univocity.parsers.common.processor.RowListProcessor;
+import com.univocity.parsers.csv.CsvParser;
+import com.univocity.parsers.csv.CsvParserSettings;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
@@ -27,7 +32,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 
 /**
@@ -60,9 +64,7 @@ public class FilesJoinerLogic {
         if (files == null) {
             return;
         }
-        executorService = Executors.newSingleThreadExecutor();
-        future = executorService.submit(() -> {
-            LogicSingleton.setCountToZero();
+        LogicSingleton.setCountToZero();
             
             files.forEach(file -> {
                 try {
@@ -77,7 +79,31 @@ public class FilesJoinerLogic {
                 removeDuplicates();
             }
             countItems();
+            ArrayList<Integer> columns = getSelectableColumns();
+            String data = writeDataToString();
+            removeEmptyColumns(data, columns);
             saveDataToFile();
+        executorService = Executors.newSingleThreadExecutor();
+        future = executorService.submit(() -> {
+//            LogicSingleton.setCountToZero();
+//            
+//            files.forEach(file -> {
+//                try {
+//                    file.initFile();
+//                } catch (IOException ex) {
+//                    Logger.getLogger(FilesJoinerLogic.class.getName()).log(Level.SEVERE, null, ex);
+//                }
+//            });
+//            normalizeHeaders();
+//            scrapeDataFromCsvFiles();
+//            if (parent.getCbRemoveDuplicates().isSelected()) {
+//                removeDuplicates();
+//            }
+//            countItems();
+//            ArrayList<Integer> columns = getSelectableColumns();
+//            String data = writeDataToString();
+//            removeEmptyColumns(data, columns);
+//            saveDataToFile();
         });
 
         Thread seeker = new Thread() {
@@ -114,8 +140,35 @@ public class FilesJoinerLogic {
         }
         return resEntry;
     }
-
-    private void saveDataToFile() {
+    
+    private void removeEmptyColumns(String data, ArrayList<Integer> indexesToSelect) {
+        CsvParserSettings settings = new CsvParserSettings();
+        RowListProcessor rowProcessor = new RowListProcessor();
+        settings.setProcessor(rowProcessor);
+        settings.setNullValue("");
+        settings.setEmptyValue("");
+        settings.setHeaderExtractionEnabled(true);
+        settings.setAutoConfigurationEnabled(true);
+        Integer[] stockArr = new Integer[indexesToSelect.size()];
+        stockArr = indexesToSelect.toArray(stockArr);
+        Arrays.sort(stockArr);
+        settings.selectIndexes(stockArr);
+        
+        CsvParser parser = new CsvParser(settings);
+        this.resultList = (ArrayList<String[]>) parser.parseAll(new ByteArrayInputStream(data.getBytes()));
+        if (ExtendedFile.isFileHasHeaders(rowProcessor.getHeaders())) {
+            this.headers = new HashMap<String, Integer>();
+            String[] newHeaders = rowProcessor.getHeaders();
+            for (int i = 0; i < newHeaders.length; i++) {
+                if (indexesToSelect.contains(i)) {
+                    this.headers.put(newHeaders[i], i);
+                }
+            }
+        }
+        
+    }
+    
+    public String writeDataToString() {
         StringBuilder sb = new StringBuilder();
         HashMap<String, Integer> sortedHeaders = sortHashMapByValues(headers);
         int counter = sortedHeaders.entrySet().size();
@@ -137,6 +190,10 @@ public class FilesJoinerLogic {
             }
             sb.append("\n");
         }
+        return sb.toString();
+    }
+
+    private void saveDataToFile() {
         try {
             DateFormat sdf = new SimpleDateFormat("yyyyMMdd");
             Date date = new Date();
@@ -163,14 +220,14 @@ public class FilesJoinerLogic {
                 names += (files.size() - 3) + "_more";
             }
             String pathToSave = outputPath + File.separator + names + ".csv";
-            Files.write(Paths.get(pathToSave), sb.toString().getBytes(), StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+            Files.write(Paths.get(pathToSave), writeDataToString().toString().getBytes(), StandardOpenOption.WRITE, StandardOpenOption.CREATE);
         } catch (IOException ex) {
             Logger.getLogger(FilesJoinerLogic.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
 
     public void setOutputPath(String path) {
-            outputPath = path;
+        outputPath = path;
     }
 
     private LinkedHashMap<String, Integer> sortHashMapByValues(
@@ -201,6 +258,36 @@ public class FilesJoinerLogic {
             }
         }
         return sortedMap;
+    }
+    
+    private ArrayList<Integer> getSelectableColumns() {
+        ArrayList<Integer> columnIndexes = new ArrayList<Integer>();
+        for (int j = 0; j < headers.size(); j++) {
+            boolean isColumnEmpty = true;
+            for (int i = 0; i < resultList.size(); i++) {
+                if (!StringUtils.isBlank(resultList.get(i)[j])) {
+                    isColumnEmpty = false;
+                    break;
+                }
+            }
+            if (isColumnEmpty) {
+                columnIndexes.add(j);
+            }
+        }
+        
+        ArrayList<Integer> columnIndexesToSelect = new ArrayList<Integer>();
+        HashMap<String, Integer> headersCopy = new HashMap<String, Integer>(this.headers); 
+        for (Integer index : columnIndexes) {
+            if (headersCopy.containsValue(index)) {
+                Entry<String, Integer> entry = getKeysByValue(headersCopy, index);
+                headersCopy.remove(entry.getKey());
+            }
+        }
+        for (Entry<String, Integer> entry : headersCopy.entrySet()) {
+            columnIndexesToSelect.add(entry.getValue());
+        }
+
+        return columnIndexesToSelect;
     }
 
     private void scrapeDataFromCsvFiles() {

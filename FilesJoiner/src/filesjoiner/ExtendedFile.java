@@ -64,8 +64,7 @@ public class ExtendedFile extends File {
             settings.setHeaderExtractionEnabled(true);
             this.headers = rowProcessor.getHeaders();
         }
-        else
-        {
+        else {
             detectHeaders(parser.parseAll(getStream()).get(0));
         }
         lines = parser.parseAll(getStream());
@@ -86,7 +85,7 @@ public class ExtendedFile extends File {
          return objToRead;
     }
     
-    private boolean isFileHasHeaders(String[] scrapedHeaders) {
+    public static boolean isFileHasHeaders(String[] scrapedHeaders) {
         for (String scrapedHeader : scrapedHeaders) {
             for (Map.Entry<String, Integer> entry : LogicSingleton.getLogic().headers.entrySet()) {
                 if (entry.getKey().equalsIgnoreCase(scrapedHeader)) {
