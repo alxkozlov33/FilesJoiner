@@ -99,37 +99,38 @@ public class FilesJoinerLogic {
         seeker.start();
     }
     
-    private void removeEmptyColumns(String data, ArrayList<Integer> selectableColumns) {
+    private String removeEmptyColumns(String data, ArrayList<Integer> selectableColumns) {
         CsvParserSettings settings = new CsvParserSettings();
         RowListProcessor rowProcessor = new RowListProcessor();
         settings.setProcessor(rowProcessor);
         settings.setNullValue("");
         settings.setEmptyValue("");
         settings.detectFormatAutomatically();
-        settings.setAutoConfigurationEnabled(true);
         if (selectableColumns != null) {
             Object[] objHeaders = selectableColumns.toArray();
             Integer[] columns =  Arrays.copyOf(objHeaders, objHeaders.length, Integer[].class);
             Arrays.sort(columns);
             settings.selectIndexes(columns);
         }
-        CsvParser parser = new CsvParser(settings);
-        
-        List<String[]> lines = parser.parseAll(new StringReader(data));
-        String[] headers = null;
-        if (ExtendedFile.isFileHasHeaders(rowProcessor.getHeaders())) {
+        else {
             settings.setHeaderExtractionEnabled(true);
-            lines = parser.parseAll(new StringReader(data));
-            headers = rowProcessor.getHeaders();
         }
-        else
-        {
-            ExtendedFile.detectHeaders(parser.parseAll(new StringReader(data)).get(0));
+        CsvParser parser = new CsvParser(settings);
+        List<String[]> lines = parser.parseAll(new StringReader(data));
+        if (settings.isHeaderExtractionEnabled()) {
+            ArrayList<Integer> selectableColumnsArray = getSelectableColumns(lines);
+            removeEmptyColumns(data, selectableColumnsArray);
         }
-        lines = parser.parseAll(new StringReader(data));
-        ArrayList<Integer> selectableColumnsArray = getSelectableColumns(lines);
-        headers = rowProcessor.getHeaders();
-        removeEmptyColumns(data, selectableColumnsArray);
+        
+        String result = "";
+        for (String[] line : lines) {
+            for (String cell : line) {
+                result += "\""+ cell + "\"" + ",";
+            }
+            result += "\n";
+        }
+        
+        return result;
     }
 
         private ArrayList<Integer> getSelectableColumns(List<String[]> dataList) {
@@ -205,7 +206,7 @@ public class FilesJoinerLogic {
             }
             sb.append("\n");
         }
-        removeEmptyColumns(sb.toString(), null);
+        String result = removeEmptyColumns(sb.toString(), null);
         try {
             DateFormat sdf = new SimpleDateFormat("yyyyMMdd");
             Date date = new Date();
@@ -232,7 +233,7 @@ public class FilesJoinerLogic {
                 names += (files.size() - 3) + "_more";
             }
             String pathToSave = outputPath + File.separator + names + ".csv";
-            Files.write(Paths.get(pathToSave), sb.toString().getBytes(), StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+            Files.write(Paths.get(pathToSave), result.getBytes(), StandardOpenOption.WRITE, StandardOpenOption.CREATE);
         } catch (IOException ex) {
             Logger.getLogger(FilesJoinerLogic.class.getName()).log(Level.SEVERE, null, ex);
         }
