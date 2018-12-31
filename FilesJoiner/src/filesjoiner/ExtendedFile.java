@@ -56,7 +56,8 @@ public class ExtendedFile extends File {
         settings.setProcessor(rowProcessor);
         settings.setNullValue("");
         settings.setEmptyValue("");
-        settings.detectFormatAutomatically('\t', ' ', ',');
+        settings.detectFormatAutomatically();
+        settings.setAutoConfigurationEnabled(true);
         CsvParser parser = new CsvParser(settings);
         
         parser.parseAll(getStream());
@@ -66,7 +67,7 @@ public class ExtendedFile extends File {
         }
         else
         {
-            detectHeaders(parser.parseAll(getStream()).get(0));
+            this.headers = detectHeaders(parser.parseAll(getStream()).get(0));
         }
         lines = parser.parseAll(getStream());
         initHeaderPositionsFrom();
@@ -86,7 +87,7 @@ public class ExtendedFile extends File {
          return objToRead;
     }
     
-    private boolean isFileHasHeaders(String[] scrapedHeaders) {
+    public static boolean isFileHasHeaders(String[] scrapedHeaders) {
         for (String scrapedHeader : scrapedHeaders) {
             for (Map.Entry<String, Integer> entry : LogicSingleton.getLogic().headers.entrySet()) {
                 if (entry.getKey().equalsIgnoreCase(scrapedHeader)) {
@@ -97,7 +98,7 @@ public class ExtendedFile extends File {
         return false;
     }
     
-    private void detectHeaders(String[] firstRow) {
+    public static String[] detectHeaders(String[] firstRow) {
         ArrayList<String> headers = new ArrayList<String>();
         int counter = 0;
         for (String cell : firstRow) {
@@ -112,7 +113,7 @@ public class ExtendedFile extends File {
             }
         }
         Object[] objHeaders = headers.toArray();
-        this.headers = Arrays.copyOf(objHeaders, objHeaders.length, String[].class);
+        return Arrays.copyOf(objHeaders, objHeaders.length, String[].class);
     }
 
     private String echoAsCSV(Sheet sheet) {

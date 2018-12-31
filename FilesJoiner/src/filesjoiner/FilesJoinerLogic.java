@@ -5,8 +5,12 @@
  */
 package filesjoiner;
 
+import com.univocity.parsers.common.processor.RowListProcessor;
+import com.univocity.parsers.csv.CsvParser;
+import com.univocity.parsers.csv.CsvParserSettings;
 import java.io.File;
 import java.io.IOException;
+import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
@@ -19,6 +23,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -27,7 +32,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 
 /**
@@ -94,6 +98,70 @@ public class FilesJoinerLogic {
         };
         seeker.start();
     }
+    
+    private void removeEmptyColumns(String data, ArrayList<Integer> selectableColumns) {
+        CsvParserSettings settings = new CsvParserSettings();
+        RowListProcessor rowProcessor = new RowListProcessor();
+        settings.setProcessor(rowProcessor);
+        settings.setNullValue("");
+        settings.setEmptyValue("");
+        settings.detectFormatAutomatically();
+        settings.setAutoConfigurationEnabled(true);
+        if (selectableColumns != null) {
+            Object[] objHeaders = selectableColumns.toArray();
+            Integer[] columns =  Arrays.copyOf(objHeaders, objHeaders.length, Integer[].class);
+            Arrays.sort(columns);
+            settings.selectIndexes(columns);
+        }
+        CsvParser parser = new CsvParser(settings);
+        
+        List<String[]> lines = parser.parseAll(new StringReader(data));
+        String[] headers = null;
+        if (ExtendedFile.isFileHasHeaders(rowProcessor.getHeaders())) {
+            settings.setHeaderExtractionEnabled(true);
+            lines = parser.parseAll(new StringReader(data));
+            headers = rowProcessor.getHeaders();
+        }
+        else
+        {
+            ExtendedFile.detectHeaders(parser.parseAll(new StringReader(data)).get(0));
+        }
+        lines = parser.parseAll(new StringReader(data));
+        ArrayList<Integer> selectableColumnsArray = getSelectableColumns(lines);
+        headers = rowProcessor.getHeaders();
+        removeEmptyColumns(data, selectableColumnsArray);
+    }
+
+        private ArrayList<Integer> getSelectableColumns(List<String[]> dataList) {
+        ArrayList<Integer> columnIndexes = new ArrayList<Integer>();
+        for (int j = 0; j < headers.size(); j++) {
+            boolean isColumnEmpty = true;
+            for (int i = 0; i < dataList.size(); i++) {
+                if (!StringUtils.isBlank(dataList.get(i)[j])) {
+                    isColumnEmpty = false;
+                    break;
+                }
+            }
+            if (isColumnEmpty) {
+                columnIndexes.add(j);
+            }
+        }
+        
+        ArrayList<Integer> columnIndexesToSelect = new ArrayList<Integer>();
+        HashMap<String, Integer> headersCopy = new HashMap<String, Integer>(this.headers); 
+        for (Integer index : columnIndexes) {
+            if (headersCopy.containsValue(index)) {
+                Entry<String, Integer> entry = getKeysByValue(headersCopy, index);
+                headersCopy.remove(entry.getKey());
+            }
+        }
+        for (Entry<String, Integer> entry : headersCopy.entrySet()) {
+            columnIndexesToSelect.add(entry.getValue());
+        }
+
+        return columnIndexesToSelect;
+    }
+
 
     private void countItems() {
         ArrayList<String> urls = new ArrayList<String>();
@@ -137,6 +205,7 @@ public class FilesJoinerLogic {
             }
             sb.append("\n");
         }
+        removeEmptyColumns(sb.toString(), null);
         try {
             DateFormat sdf = new SimpleDateFormat("yyyyMMdd");
             Date date = new Date();
