@@ -119,7 +119,7 @@ public class FilesJoinerLogic {
         List<String[]> lines = parser.parseAll(new StringReader(data));
         if (settings.isHeaderExtractionEnabled()) {
             ArrayList<Integer> selectableColumnsArray = getSelectableColumns(lines);
-            removeEmptyColumns(data, selectableColumnsArray);
+            return removeEmptyColumns(data, selectableColumnsArray);
         }
         
         String result = "";
@@ -233,7 +233,7 @@ public class FilesJoinerLogic {
                 names += (files.size() - 3) + "_more";
             }
             String pathToSave = outputPath + File.separator + names + ".csv";
-            Files.write(Paths.get(pathToSave), result.getBytes(), StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+            Files.write(Paths.get(pathToSave), result.toString().getBytes(), StandardOpenOption.WRITE, StandardOpenOption.CREATE);
         } catch (IOException ex) {
             Logger.getLogger(FilesJoinerLogic.class.getName()).log(Level.SEVERE, null, ex);
         }
